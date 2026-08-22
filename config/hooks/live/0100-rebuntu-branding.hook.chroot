@@ -11,6 +11,17 @@ if [ -f /etc/os-release ]; then
       /etc/os-release
 fi
 
+# Ensure kernel initramfs files are generated before live-build's chroot
+# permission/hack stage. Some Ubuntu package triggers defer this work,
+# leaving initrd.img symlinks dangling and causing live-build to fail.
+if command -v update-initramfs >/dev/null 2>&1; then
+    update-initramfs -c -k all 2>/dev/null || update-initramfs -u -k all 2>/dev/null || true
+fi
+
+# Remove only dangling /boot initrd symlinks so live-build's permission
+# pass does not abort on them. Real initrd files are left untouched.
+find /boot -maxdepth 1 -type l -xtype l -name 'initrd.img*' -delete 2>/dev/null || true
+
 # Add a small release helper for testing the live image.
 cat > /usr/local/bin/rebuntu-info <<'EOF'
 #!/bin/sh
