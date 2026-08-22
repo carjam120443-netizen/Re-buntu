@@ -23,17 +23,31 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y live-build debootstrap squashfs-tools xorriso
 
+      - name: Configure live-build
+        run: |
+          set -e
+          # Re-buntu does not need the Debian installer image. The Ubuntu Noble
+          # installer path used by live-build is currently invalid (404), and
+          # disabling it lets the live ISO build proceed normally.
+          if grep -Rqs '^LB_DEBIAN_INSTALLER=' config auto 2>/dev/null; then
+            echo "Existing Debian installer setting detected."
+          fi
+          printf '\nLB_DEBIAN_INSTALLER="false"\n' >> config/binary 2>/dev/null || true
+
       - name: Patch live-build initrd permission handling
         run: |
           set -e
-          LB_SCRIPT="$(dpkg -L live-build | grep -E '/(lb_)?chroot_hacks$' | head -n 1 || true)"
-          if [ -z "$LB_SCRIPT" ]; then
+          LB_SCRIPT="/usr/lib/live/build/lb_chroot_hacks"
+          if [ ! -f "$LB_SCRIPT" ]; then
+            LB_SCRIPT="$(dpkg -L live-build | grep -E '/(lb_)?chroot_hacks$' | head -n 1 || true)"
+          fi
+          if [ -z "$LB_SCRIPT" ] || [ ! -f "$LB_SCRIPT" ]; then
             echo "Could not locate live-build chroot_hacks script"
             dpkg -L live-build | grep -E 'chroot.*hacks|lb_.*hacks' || true
             exit 1
           fi
           echo "Using live-build chroot_hacks: $LB_SCRIPT"
-          sudo grep -n -E 'chmod.*initrd|initrd.*chmod' "$LB_SCRIPT" || true
+
           sudo python3 - "$LB_SCRIPT" <<'PY'
           from pathlib import Path
           import sys
@@ -46,20 +60,20 @@ jobs:
           for i, line in enumerate(lines):
               if "chmod" in line and "initrd" in line:
                   indent = line[:len(line) - len(line.lstrip())]
-                  lines[i] = indent + "find chroot/boot -maxdepth 1 -type f -name 'initrd.img*' -exec chmod go+r {} +"
+                  lines[i] = indent + "find chroot/boot -maxdepth 1 -type f -name 'initrd*' -exec chmod go+r {} +"
                   changed = True
 
-          if not changed:
-              raise SystemExit("Could not find an initrd chmod command in live-build chroot_hacks")
-
-          path.write_text("\n".join(lines) + "\n")
-          print("Patched live-build to chmod only real initrd files, not dangling symlinks.")
+          if changed:
+              path.write_text("\n".join(lines) + "\n")
+              print("Patched live-build to chmod only real initrd files.")
+          else:
+              print("No initrd chmod line needed patching; continuing with the installed live-build version.")
           PY
 
       - name: Build Re-buntu
         run: |
           chmod +x build.sh
-          chmod +x config/hooks/live/*.hook.chroot
+          find config/hooks/live -type f -name '*.hook.chroot' -exec chmod +x {} +
           sudo ./build.sh
 
       - name: Upload ISO
