@@ -26,48 +26,48 @@ jobs:
       - name: Configure live-build
         run: |
           set -e
-          # Re-buntu does not need the Debian installer image. The Ubuntu Noble
-          # installer path used by live-build is currently invalid (404), and
-          # disabling it lets the live ISO build proceed normally.
-          if grep -Rqs '^LB_DEBIAN_INSTALLER=' config auto 2>/dev/null; then
-            echo "Existing Debian installer setting detected."
-          fi
+          # Re-buntu is a live ISO, not an installer ISO. Ubuntu Noble's
+          # Debian-installer path used by this live-build release can point at
+          # a removed/invalid installer image, so keep the installer disabled.
           printf '\nLB_DEBIAN_INSTALLER="false"\n' >> config/binary 2>/dev/null || true
 
-      - name: Patch live-build initrd permission handling
+      - name: Patch live-build initrd and obsolete syslinux handling
         run: |
           set -e
-          LB_SCRIPT="/usr/lib/live/build/lb_chroot_hacks"
-          if [ ! -f "$LB_SCRIPT" ]; then
-            LB_SCRIPT="$(dpkg -L live-build | grep -E '/(lb_)?chroot_hacks$' | head -n 1 || true)"
-          fi
-          if [ -z "$LB_SCRIPT" ] || [ ! -f "$LB_SCRIPT" ]; then
-            echo "Could not locate live-build chroot_hacks script"
-            dpkg -L live-build | grep -E 'chroot.*hacks|lb_.*hacks' || true
+
+          # Ubuntu's Noble live-build package still contains old Ubuntu
+          # syslinux-theme package names that no longer exist. Re-buntu uses
+          # live-build's own bootloader templates instead, so remove those
+          # obsolete package names from the installed helper before building.
+          LB_SYSLINUX_SCRIPT="$(dpkg -L live-build | grep -E '/lb_binary_syslinux$' | head -n 1 || true)"
+          if [ -z "$LB_SYSLINUX_SCRIPT" ] || [ ! -f "$LB_SYSLINUX_SCRIPT" ]; then
+            echo "Could not locate live-build lb_binary_syslinux"
+            dpkg -L live-build | grep 'binary_syslinux' || true
             exit 1
           fi
-          echo "Using live-build chroot_hacks: $LB_SCRIPT"
+          echo "Using live-build syslinux helper: $LB_SYSLINUX_SCRIPT"
 
-          sudo python3 - "$LB_SCRIPT" <<'PY'
+          sudo python3 - "$LB_SYSLINUX_SCRIPT" <<'PY'
           from pathlib import Path
           import sys
 
           path = Path(sys.argv[1])
           text = path.read_text()
-          lines = text.splitlines()
-          changed = False
+          old = text
 
-          for i, line in enumerate(lines):
-              if "chmod" in line and "initrd" in line:
-                  indent = line[:len(line) - len(line.lstrip())]
-                  lines[i] = indent + "find chroot/boot -maxdepth 1 -type f -name 'initrd*' -exec chmod go+r {} +"
-                  changed = True
+          # These packages were used by old Ubuntu live-build integrations but
+          # are unavailable on current Noble. Keep syslinux itself intact.
+          for package in (
+              "syslinux-themes-ubuntu-oneiric",
+              "gfxboot-theme-ubuntu",
+          ):
+              text = text.replace(package, "")
 
-          if changed:
-              path.write_text("\n".join(lines) + "\n")
-              print("Patched live-build to chmod only real initrd files.")
+          if text != old:
+              path.write_text(text)
+              print("Removed obsolete Ubuntu syslinux theme dependencies.")
           else:
-              print("No initrd chmod line needed patching; continuing with the installed live-build version.")
+              print("No obsolete syslinux theme package names were present.")
           PY
 
       - name: Build Re-buntu
