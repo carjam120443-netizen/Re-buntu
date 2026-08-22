@@ -36,7 +36,6 @@ jobs:
           sudo grep -n -E 'chmod.*initrd|initrd.*chmod' "$LB_SCRIPT" || true
           sudo python3 - "$LB_SCRIPT" <<'PY'
           from pathlib import Path
-          import re
           import sys
 
           path = Path(sys.argv[1])
@@ -45,9 +44,9 @@ jobs:
           changed = False
 
           for i, line in enumerate(lines):
-              if "chmod" in line and "initrd.img" in line:
+              if "chmod" in line and "initrd" in line:
                   indent = line[:len(line) - len(line.lstrip())]
-                  lines[i] = indent + "find chroot/boot -maxdepth 1 -type f -name 'initrd.img*' -exec chmod a+r {} +"
+                  lines[i] = indent + "find chroot/boot -maxdepth 1 -type f -name 'initrd.img*' -exec chmod go+r {} +"
                   changed = True
 
           if not changed:
