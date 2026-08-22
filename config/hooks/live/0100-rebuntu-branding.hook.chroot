@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+# Re-buntu identity
+printf '%s\n' 'Re-buntu' > /etc/rebuntu-release
+
+if [ -f /etc/os-release ]; then
+    sed -i \
+      -e 's/^NAME=.*/NAME="Re-buntu"/' \
+      -e 's/^PRETTY_NAME=.*/PRETTY_NAME="Re-buntu (Ubuntu-based RebuiltTux)"/' \
+      /etc/os-release
+fi
+
+# Add a small release helper for testing the live image.
+cat > /usr/local/bin/rebuntu-info <<'EOF'
+#!/bin/sh
+printf '%s\n' 'Re-buntu — Ubuntu-based RebuiltTux distribution'
+printf 'Base: Ubuntu\n'
+printf 'Project: RebuiltTux\n'
+EOF
+chmod 0755 /usr/local/bin/rebuntu-info
