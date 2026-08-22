@@ -24,12 +24,15 @@ rm -rf "${BUILD_DIR}" dist
 mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
+# Re-buntu is a live ISO, not an installer ISO. Ubuntu Noble's Debian-installer
+# path used by live-build can point at a removed/invalid installer image (404),
+# so explicitly disable it here rather than relying on a later workflow patch.
 lb config \
   --distribution "${CODENAME}" \
   --architectures "${ARCH}" \
   --archive-areas "main restricted universe multiverse" \
   --binary-images iso-hybrid \
-  --debian-installer live \
+  --debian-installer false \
   --apt-recommends false \
   --bootappend-live "boot=live components quiet splash"
 
