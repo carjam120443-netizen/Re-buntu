@@ -1,0 +1,5 @@
+build/
+dist/
+*.iso
+*.iso.sha256
+*.log
