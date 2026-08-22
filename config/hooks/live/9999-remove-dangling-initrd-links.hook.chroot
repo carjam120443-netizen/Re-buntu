@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+# live-build's chroot_hacks stage can fail when Ubuntu's deferred initramfs
+# generation leaves dangling convenience symlinks in /boot.
+# Remove only symlinks whose targets do not exist; never remove real files.
+for link in /boot/initrd.img /boot/initrd.img.old; do
+    if [ -L "$link" ] && [ ! -e "$link" ]; then
+        echo "Re-buntu: removing dangling initrd symlink: $link"
+        rm -f -- "$link"
+    fi
+done
+
+# Also catch any versioned initrd symlinks matching the same pattern.
+find /boot -maxdepth 1 -type l -name 'initrd.img*' -exec sh -c '
+    for link do
+        if [ ! -e "$link" ]; then
+            echo "Re-buntu: removing dangling initrd symlink: $link"
+            rm -f -- "$link"
+        fi
+    done
+' sh {} +
