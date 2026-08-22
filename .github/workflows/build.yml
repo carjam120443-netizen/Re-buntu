@@ -23,6 +23,35 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y live-build debootstrap squashfs-tools xorriso
 
+      - name: Patch live-build initrd permission handling
+        run: |
+          set -e
+          LB_SCRIPT="/usr/lib/live/build/chroot_hacks"
+          if [ ! -f "$LB_SCRIPT" ]; then
+            LB_SCRIPT="/usr/share/live/build/scripts/build/lb_chroot_hacks"
+          fi
+          echo "Using live-build chroot_hacks: $LB_SCRIPT"
+          sudo grep -n "initrd.img" "$LB_SCRIPT" || true
+          sudo python3 - "$LB_SCRIPT" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          old = text
+          lines = text.splitlines()
+          changed = False
+          for i, line in enumerate(lines):
+              if "chmod" in line and "chroot/boot/initrd.img" in line and "find" not in line:
+                  indent = line[:len(line) - len(line.lstrip())]
+                  lines[i] = indent + "find chroot/boot -maxdepth 1 -type f -name 'initrd.img*' -exec chmod a+r {} +"
+                  changed = True
+          if not changed:
+              raise SystemExit("Could not find the live-build initrd chmod command to patch")
+          path.write_text("\n".join(lines) + "\n")
+          print("Patched live-build to chmod only real initrd files, not dangling symlinks.")
+          PY
+
       - name: Build Re-buntu
         run: |
           chmod +x build.sh
