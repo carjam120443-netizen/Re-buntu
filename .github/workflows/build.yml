@@ -27,7 +27,7 @@ jobs:
         run: |
           chmod +x build.sh
           chmod +x config/hooks/live/*.hook.chroot
-          ./build.sh
+          sudo ./build.sh
 
       - name: Upload ISO
         uses: actions/upload-artifact@v4
