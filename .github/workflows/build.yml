@@ -26,9 +26,11 @@ jobs:
       - name: Patch live-build initrd permission handling
         run: |
           set -e
-          LB_SCRIPT="/usr/lib/live/build/chroot_hacks"
-          if [ ! -f "$LB_SCRIPT" ]; then
-            LB_SCRIPT="/usr/share/live/build/scripts/build/lb_chroot_hacks"
+          LB_SCRIPT="$(dpkg -L live-build | grep -E '/(lb_)?chroot_hacks$' | head -n 1 || true)"
+          if [ -z "$LB_SCRIPT" ]; then
+            echo "Could not locate live-build chroot_hacks script"
+            dpkg -L live-build | grep -E 'chroot.*hacks|lb_.*hacks' || true
+            exit 1
           fi
           echo "Using live-build chroot_hacks: $LB_SCRIPT"
           sudo grep -n "initrd.img" "$LB_SCRIPT" || true
@@ -38,7 +40,6 @@ jobs:
 
           path = Path(sys.argv[1])
           text = path.read_text()
-          old = text
           lines = text.splitlines()
           changed = False
           for i, line in enumerate(lines):
