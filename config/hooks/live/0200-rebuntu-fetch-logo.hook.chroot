@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+# Install the compact Re-buntu fetch logo for fetch applications.
+install -d /usr/share/re-buntu
+install -m 0644 /usr/share/re-buntu/fetch-logo.txt /usr/share/re-buntu/fetch-logo.txt
+
+# Keep the logo available to users and scripts without forcing a specific
+# fetch application/configuration onto the image yet.
+cat > /usr/local/bin/rebuntu-fetch-logo <<'EOF'
+#!/bin/sh
+cat /usr/share/re-buntu/fetch-logo.txt
+EOF
+chmod 0755 /usr/local/bin/rebuntu-fetch-logo
