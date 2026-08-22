@@ -24,30 +24,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y debootstrap squashfs-tools xorriso wget
 
-          # Noble's repository can provide an older live-build whose
-          # lb_chroot_hacks chmods dangling initrd symlinks and exits 123.
-          # Ubuntu fixed that exact bug in 3.0~a57-1ubuntu52 and later.
-          # Use the current Ubuntu live-build package instead of patching the
-          # installed helper at runtime.
+          # Install Ubuntu's fixed live-build package. This avoids the Noble
+          # lb_chroot_hacks dangling-initrd chmod failure.
           wget -q https://archive.ubuntu.com/ubuntu/pool/main/l/live-build/live-build_3.0~a57-1ubuntu56_all.deb -O /tmp/live-build.deb
           sudo apt-get install -y /tmp/live-build.deb
           live-build --version
 
-      - name: Configure live-build
-        run: |
-          set -e
-          # Re-buntu is a live ISO, not an installer ISO. Ubuntu Noble's
-          # Debian-installer path used by this live-build release can point at
-          # a removed/invalid installer image, so keep the installer disabled.
-          printf '\nLB_DEBIAN_INSTALLER="false"\n' >> config/binary 2>/dev/null || true
-
-      - name: Patch obsolete syslinux handling
+      - name: Patch obsolete syslinux package references
         run: |
           set -e
 
-          # Ubuntu live-build can still contain old Ubuntu syslinux-theme
-          # package names that no longer exist. Re-buntu uses live-build's
-          # own bootloader templates instead, so remove those obsolete names.
+          # lb_binary_syslinux can request old Ubuntu theme packages that no
+          # longer exist in Noble. Remove the package names from the helper,
+          # but do not alter the actual syslinux bootloader logic.
           LB_SYSLINUX_SCRIPT="$(dpkg -L live-build | grep -E '/lb_binary_syslinux$' | head -n 1 || true)"
           if [ -z "$LB_SYSLINUX_SCRIPT" ] || [ ! -f "$LB_SYSLINUX_SCRIPT" ]; then
             echo "Could not locate live-build lb_binary_syslinux"
@@ -62,20 +51,52 @@ jobs:
 
           path = Path(sys.argv[1])
           text = path.read_text()
-          old = text
 
-          for package in (
+          packages = (
               "syslinux-themes-ubuntu-oneiric",
               "gfxboot-theme-ubuntu",
-          ):
+          )
+
+          for package in packages:
               text = text.replace(package, "")
 
-          if text != old:
-              path.write_text(text)
-              print("Removed obsolete Ubuntu syslinux theme dependencies.")
-          else:
-              print("No obsolete syslinux theme package names were present.")
+          path.write_text(text)
+          print("Patched obsolete syslinux theme package references.")
           PY
+
+      - name: Disable broken syslinux theme installation
+        run: |
+          set -e
+          # The Noble helper may still execute an apt install even after the
+          # package names are removed. Replace the theme-install package list
+          # with an empty list while retaining the rest of syslinux setup.
+          LB_SYSLINUX_SCRIPT="$(dpkg -L live-build | grep -E '/lb_binary_syslinux$' | head -n 1)"
+          sudo python3 - "$LB_SYSLINUX_SCRIPT" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          old = text
+
+          # Remove the obsolete package names wherever the helper constructs
+          # the package installation list. The actual syslinux binaries are
+          # still installed by live-build.
+          for line in text.splitlines():
+              if 'syslinux-themes-ubuntu-oneiric' in line or 'gfxboot-theme-ubuntu' in line:
+                  text = text.replace(line, '')
+
+          if text == old:
+              print('No obsolete theme-install lines remain; continuing.')
+          else:
+              path.write_text(text)
+              print('Removed obsolete theme-install lines.')
+          PY
+
+      - name: Configure live-build
+        run: |
+          set -e
+          # Re-buntu is a live ISO, not an installer ISO.
+          printf '\nLB_DEBIAN_INSTALLER="false"\n' >> config/binary 2>/dev/null || true
 
       - name: Build Re-buntu
         run: |
