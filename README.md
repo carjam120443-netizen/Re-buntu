@@ -1,5 +1,11 @@
 # Re-buntu
 
+> ⚠️ **WARNING — BETA / UNSTABLE PROJECT**
+>
+> **Do not use Re-buntu as your main operating system right now**, especially if you are not familiar with Linux, coding, or software development. Re-buntu is an early beta project and may be **very unstable**, contain bugs, fail to boot, or cause unexpected problems. Test it in a **virtual machine or on non-critical hardware** instead.
+>
+> This project is under active development and should not be considered production-ready.
+
 **Re-buntu** is an Ubuntu-based **RebuiltTux** Linux distribution.
 
 ## Build system
@@ -53,7 +59,7 @@ dist/                    generated ISO output (ignored by Git)
 
 ## Status
 
-🚧 **Early development** — the initial live-build system is now in place.
+🚧 **Early beta development** — the initial live-build system is now in place.
 
 ## Name
 
