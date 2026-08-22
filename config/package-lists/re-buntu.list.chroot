@@ -1,0 +1,15 @@
+# Re-buntu base packages
+linux-generic
+systemd-sysv
+network-manager
+sudo
+curl
+wget
+git
+vim
+nano
+htop
+fastfetch
+
+# Desktop
+ubuntu-desktop-minimal
