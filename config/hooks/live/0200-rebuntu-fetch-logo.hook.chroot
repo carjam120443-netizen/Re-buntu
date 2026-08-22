@@ -11,3 +11,13 @@ cat > /usr/local/bin/rebuntu-fetch-logo <<'EOF'
 cat /usr/share/re-buntu/fetch/logo.txt
 EOF
 chmod 0755 /usr/local/bin/rebuntu-fetch-logo
+
+# live-build's chroot_hacks stage applies permissions recursively and fails on
+# Ubuntu's dangling initrd convenience symlinks when initramfs generation was
+# deferred inside the chroot. Remove only those dangling symlinks before that
+# stage; real kernel/initramfs files are left untouched.
+for link in /boot/initrd.img /boot/initrd.img.old; do
+    if [ -L "$link" ] && [ ! -e "$link" ]; then
+        rm -f "$link"
+    fi
+done
