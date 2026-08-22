@@ -55,8 +55,6 @@ jobs:
           text = path.read_text()
           old = text
 
-          # These packages were used by old Ubuntu live-build integrations but
-          # are unavailable on current Noble. Keep syslinux itself intact.
           for package in (
               "syslinux-themes-ubuntu-oneiric",
               "gfxboot-theme-ubuntu",
@@ -68,6 +66,44 @@ jobs:
               print("Removed obsolete Ubuntu syslinux theme dependencies.")
           else:
               print("No obsolete syslinux theme package names were present.")
+          PY
+
+          # Ubuntu Noble can leave /boot/initrd.img and initrd.img.old as
+          # dangling symlinks because initramfs generation is deferred.
+          # live-build's chroot_hacks stage later chmods these paths and exits
+          # with status 123 when chmod encounters the broken links. Make the
+          # live-build helper ignore dangling initrd symlinks rather than
+          # treating this harmless condition as a fatal build error.
+          LB_CHROOT_HACKS="$(dpkg -L live-build | grep -E '/lb_chroot_hacks$' | head -n 1 || true)"
+          if [ -z "$LB_CHROOT_HACKS" ] || [ ! -f "$LB_CHROOT_HACKS" ]; then
+            echo "Could not locate live-build lb_chroot_hacks"
+            dpkg -L live-build | grep 'chroot_hacks' || true
+            exit 1
+          fi
+          echo "Using live-build chroot helper: $LB_CHROOT_HACKS"
+
+          sudo python3 - "$LB_CHROOT_HACKS" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          old = text
+
+          # The failing chmod operates recursively on the chroot and follows
+          # dangling initrd symlinks. Remove only the two known convenience
+          # links immediately before that operation.
+          marker = 'chroot/boot/initrd.img.old'
+          if marker in text and 'Re-buntu: remove dangling initrd symlinks' not in text:
+              needle = 'chroot/boot/initrd.img.old'
+              insert = '''chroot/boot/initrd.img.old\n\n# Re-buntu: remove dangling initrd symlinks before chmod can reject them.\nrm -f -- chroot/boot/initrd.img chroot/boot/initrd.img.old\n'''
+              text = text.replace(needle, insert, 1)
+
+          if text == old:
+              print("Warning: could not find the expected initrd handling in lb_chroot_hacks; leaving helper unchanged.")
+          else:
+              path.write_text(text)
+              print("Patched lb_chroot_hacks to remove dangling initrd symlinks before chmod.")
           PY
 
       - name: Build Re-buntu
