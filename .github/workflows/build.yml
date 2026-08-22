@@ -18,10 +18,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install live-build
+      - name: Install live-build and dependencies
         run: |
+          set -e
           sudo apt-get update
-          sudo apt-get install -y live-build debootstrap squashfs-tools xorriso
+          sudo apt-get install -y debootstrap squashfs-tools xorriso wget
+
+          # Noble's repository can provide an older live-build whose
+          # lb_chroot_hacks chmods dangling initrd symlinks and exits 123.
+          # Ubuntu fixed that exact bug in 3.0~a57-1ubuntu52 and later.
+          # Use the current Ubuntu live-build package instead of patching the
+          # installed helper at runtime.
+          wget -q https://archive.ubuntu.com/ubuntu/pool/main/l/live-build/live-build_3.0~a57-1ubuntu56_all.deb -O /tmp/live-build.deb
+          sudo apt-get install -y /tmp/live-build.deb
+          live-build --version
 
       - name: Configure live-build
         run: |
@@ -31,14 +41,13 @@ jobs:
           # a removed/invalid installer image, so keep the installer disabled.
           printf '\nLB_DEBIAN_INSTALLER="false"\n' >> config/binary 2>/dev/null || true
 
-      - name: Patch live-build initrd and obsolete syslinux handling
+      - name: Patch obsolete syslinux handling
         run: |
           set -e
 
-          # Ubuntu's Noble live-build package still contains old Ubuntu
-          # syslinux-theme package names that no longer exist. Re-buntu uses
-          # live-build's own bootloader templates instead, so remove those
-          # obsolete package names from the installed helper before building.
+          # Ubuntu live-build can still contain old Ubuntu syslinux-theme
+          # package names that no longer exist. Re-buntu uses live-build's
+          # own bootloader templates instead, so remove those obsolete names.
           LB_SYSLINUX_SCRIPT="$(dpkg -L live-build | grep -E '/lb_binary_syslinux$' | head -n 1 || true)"
           if [ -z "$LB_SYSLINUX_SCRIPT" ] || [ ! -f "$LB_SYSLINUX_SCRIPT" ]; then
             echo "Could not locate live-build lb_binary_syslinux"
@@ -66,44 +75,6 @@ jobs:
               print("Removed obsolete Ubuntu syslinux theme dependencies.")
           else:
               print("No obsolete syslinux theme package names were present.")
-          PY
-
-          # Ubuntu Noble can leave /boot/initrd.img and initrd.img.old as
-          # dangling symlinks because initramfs generation is deferred.
-          # live-build's chroot_hacks stage later chmods these paths and exits
-          # with status 123 when chmod encounters the broken links. Make the
-          # live-build helper ignore dangling initrd symlinks rather than
-          # treating this harmless condition as a fatal build error.
-          LB_CHROOT_HACKS="$(dpkg -L live-build | grep -E '/lb_chroot_hacks$' | head -n 1 || true)"
-          if [ -z "$LB_CHROOT_HACKS" ] || [ ! -f "$LB_CHROOT_HACKS" ]; then
-            echo "Could not locate live-build lb_chroot_hacks"
-            dpkg -L live-build | grep 'chroot_hacks' || true
-            exit 1
-          fi
-          echo "Using live-build chroot helper: $LB_CHROOT_HACKS"
-
-          sudo python3 - "$LB_CHROOT_HACKS" <<'PY'
-          from pathlib import Path
-          import sys
-
-          path = Path(sys.argv[1])
-          text = path.read_text()
-          old = text
-
-          # The failing chmod operates recursively on the chroot and follows
-          # dangling initrd symlinks. Remove only the two known convenience
-          # links immediately before that operation.
-          marker = 'chroot/boot/initrd.img.old'
-          if marker in text and 'Re-buntu: remove dangling initrd symlinks' not in text:
-              needle = 'chroot/boot/initrd.img.old'
-              insert = '''chroot/boot/initrd.img.old\n\n# Re-buntu: remove dangling initrd symlinks before chmod can reject them.\nrm -f -- chroot/boot/initrd.img chroot/boot/initrd.img.old\n'''
-              text = text.replace(needle, insert, 1)
-
-          if text == old:
-              print("Warning: could not find the expected initrd handling in lb_chroot_hacks; leaving helper unchanged.")
-          else:
-              path.write_text(text)
-              print("Patched lb_chroot_hacks to remove dangling initrd symlinks before chmod.")
           PY
 
       - name: Build Re-buntu
