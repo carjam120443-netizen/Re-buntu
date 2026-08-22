@@ -1,0 +1,6 @@
+# Re-buntu Screenfetch integration reference
+# Screenfetch installations can use the canonical logo asset:
+# /usr/share/re-buntu/fetch/logo.txt
+#
+# This file intentionally remains a reference rather than modifying Screenfetch's
+# own configuration files, so Re-buntu does not depend on a particular Screenfetch version.
