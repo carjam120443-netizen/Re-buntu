@@ -33,22 +33,26 @@ jobs:
             exit 1
           fi
           echo "Using live-build chroot_hacks: $LB_SCRIPT"
-          sudo grep -n "initrd.img" "$LB_SCRIPT" || true
+          sudo grep -n -E 'chmod.*initrd|initrd.*chmod' "$LB_SCRIPT" || true
           sudo python3 - "$LB_SCRIPT" <<'PY'
           from pathlib import Path
+          import re
           import sys
 
           path = Path(sys.argv[1])
           text = path.read_text()
           lines = text.splitlines()
           changed = False
+
           for i, line in enumerate(lines):
-              if "chmod" in line and "chroot/boot/initrd.img" in line and "find" not in line:
+              if "chmod" in line and "initrd.img" in line:
                   indent = line[:len(line) - len(line.lstrip())]
                   lines[i] = indent + "find chroot/boot -maxdepth 1 -type f -name 'initrd.img*' -exec chmod a+r {} +"
                   changed = True
+
           if not changed:
-              raise SystemExit("Could not find the live-build initrd chmod command to patch")
+              raise SystemExit("Could not find an initrd chmod command in live-build chroot_hacks")
+
           path.write_text("\n".join(lines) + "\n")
           print("Patched live-build to chmod only real initrd files, not dangling symlinks.")
           PY
