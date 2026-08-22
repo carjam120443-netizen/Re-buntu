@@ -1,0 +1,37 @@
+name: Build Re-buntu ISO
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'build.sh'
+      - 'config/**'
+      - '.github/workflows/build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install live-build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y live-build debootstrap squashfs-tools xorriso
+
+      - name: Build Re-buntu
+        run: |
+          chmod +x build.sh
+          chmod +x config/hooks/live/*.hook.chroot
+          ./build.sh
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: re-buntu-iso
+          path: dist/*.iso
+          if-no-files-found: error
